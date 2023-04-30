@@ -33,6 +33,8 @@ static void visittestlists    (UnitTestlistlist uss);
 static void visitregister     (Register reg);
 static void visitregisterlist (Registerlist regs);
 static void visitroots        (void);
+static void mark              (void);
+static void growheap          (void);
 /* private declarations for mark-and-sweep collection S641a */
 static int nalloc;              /* total number of allocations */
 static int ncollections;        /* total number of collections */
@@ -67,11 +69,63 @@ static void addpage(void) {
     makecurrent(page);
     heapsize += GROWTH_UNIT;   /* OMIT */
 }
+
+/* Mark procedure from exercise 7 */
+static void mark(void) {
+    visitroots();
+}
+
+/* Grow heap procedure if all cells in heap are live */
+void growheap(void) {
+    addpage();
+}
+
 /* ms.c ((prototype)) 268b */
 Value* allocloc(void) {
     if (hp == heaplimit)
         addpage();
     assert(hp < heaplimit);
+
+    // Sweep through heap from first to last page
+    //// Page *pagelist, *curpage; (see Struct Page)
+    //// Each Page contains Mvalue pool[] of size GROWTH_UNIT and Page pointer tl
+    // If marked, skip past it and mark it not live
+    // Else unmarked, sweep past the object and return it
+    // If allocator reach end of heap
+
+
+    // Set counter (Maybe use nmarked)
+    int unmarkedcounter = 0;
+    int markedcounter = 0;
+    // Set the current page to start of pagelist
+    curpage = pagelist;
+    do {
+        // curpage should be set as current page (sets hp and heaplimit pointers)
+        makecurrent(curpage);
+        // Iterate through the page's MValue (until hp == heaplimit)
+        while (hp < heaplimit) {
+            // If heap pointer points to a live object, unmark it
+            if (hp -> live) {
+                markedcounter++;
+                hp -> live = 0;
+            } else { // Otherwise unmarked, so return it
+                unmarkedcounter++;
+                return &(hp) -> v;
+            }
+            // Increment heap pointer
+            hp++;
+        }
+        curpage = curpage -> tl;
+    } while (curpage != NULL);
+    // If reached end of heap without finding unmarked object, call mark()
+    if (unmarkedcounter == 0) {
+        mark();
+    }
+    makecurrent(pagelist);
+    if (markedcounter == heapsize) {
+        growheap();
+    }
+
 
 /* tell the debugging interface that [[&hp->v]] is about to be allocated 282e */
     gc_debug_pre_allocate(&hp->v);
@@ -85,8 +139,10 @@ static void visitenv(Env env) {
 /* ms.c ((prototype)) 269c */
 static void visitloc(Value *loc) {
     Mvalue *m = (Mvalue*) loc;
+    /* If mark bit is off, turn on (set as live)*/
     if (!m->live) {
         m->live = 1;
+        /* Visit the adjacent objects */
         visitvalue(m->v);
     }
 }
@@ -241,6 +297,7 @@ static void visittest(UnitTest t) {
     }
     assert(0);
 }
+
 /* ms.c S366a */
 static void visitroots(void) {
     visitenv(*roots.globals.user);
