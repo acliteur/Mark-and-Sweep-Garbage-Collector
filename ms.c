@@ -98,7 +98,7 @@ Value* allocloc(void) {
     int unmarkedcounter = 0;
     int markedcounter = 0;
     // Set the current page to start of pagelist
-    curpage = pagelist;
+    makecurrent(pagelist);
     do {
         // curpage should be set as current page (sets hp and heaplimit pointers)
         makecurrent(curpage);
