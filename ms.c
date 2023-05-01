@@ -63,8 +63,8 @@ static void addpage(void) {
     if (pagelist == NULL) {
         pagelist = page;
     } else {
-        assert(curpage != NULL && curpage->tl == NULL);
-        curpage->tl = page;
+        assert(curpage != NULL && curpage -> tl == NULL);
+        curpage -> tl = page;
     }
     makecurrent(page);
     heapsize += GROWTH_UNIT;   /* OMIT */
@@ -72,7 +72,20 @@ static void addpage(void) {
 
 /* Mark procedure from exercise 7 */
 static void mark(void) {
+    // Start mark procedure (start of garbage collection)
+
+    // Visit all objects reachable from roots and mark them as live
     visitroots();
+
+    // Print out statistics
+    fprintf(stderr, "[GC stats: heap size %i live data %i ratio %3f]",
+        heapsize, nmarks, (float) (heapsize / nmarks)
+    );
+
+    // Increment # of garbage collections
+    ncollections++;
+
+    // End of mark, start of sweep phase
 }
 
 /* Grow heap procedure if all cells in heap are live */
@@ -80,57 +93,141 @@ void growheap(void) {
     addpage();
 }
 
-/* ms.c ((prototype)) 268b */
 Value* allocloc(void) {
-    if (hp == heaplimit)
-        addpage();
-    assert(hp < heaplimit);
-
-    // Sweep through heap from first to last page
-    //// Page *pagelist, *curpage; (see Struct Page)
-    //// Each Page contains Mvalue pool[] of size GROWTH_UNIT and Page pointer tl
-    // If marked, skip past it and mark it not live
-    // Else unmarked, sweep past the object and return it
-    // If allocator reach end of heap
-
-
-    // Set counter (Maybe use nmarked)
-    int unmarkedcounter = 0;
+    if (pagelist == NULL) {
+        growheap();
+    }
+    // Increment number of allocations
+    nalloc++;
+    // Set counter for marked objects
     int markedcounter = 0;
+    int unmarkedcounter = 0;
     // Set the current page to start of pagelist
-    makecurrent(pagelist);
-    do {
+    curpage = pagelist;
+    while (curpage != NULL) {
         // curpage should be set as current page (sets hp and heaplimit pointers)
         makecurrent(curpage);
-        // Iterate through the page's MValue (until hp == heaplimit)
+        // Iterate through the page's MValues (until hp == heaplimit)
         while (hp < heaplimit) {
             // If heap pointer points to a live object, unmark it
             if (hp -> live) {
                 markedcounter++;
                 hp -> live = 0;
+                // Increment heap pointer
+                hp++;
             } else { // Otherwise unmarked, so return it
                 unmarkedcounter++;
-                return &(hp) -> v;
+                gc_debug_pre_allocate(&hp -> v);
+                return &(hp++) -> v;
             }
-            // Increment heap pointer
-            hp++;
         }
+        // Get next page
         curpage = curpage -> tl;
-    } while (curpage != NULL);
-    // If reached end of heap without finding unmarked object, call mark()
+        // Loop again if the next page isn't NULL
+    }
+    // All pages have been sweeped, everything should set as unmarked
     if (unmarkedcounter == 0) {
-        mark();
-    }
-    makecurrent(pagelist);
-    if (markedcounter == heapsize) {
-        growheap();
+        if (markedcounter > 2) {
+            growheap();
+        } else {
+            mark();
+            makecurrent(pagelist);
+        }
     }
 
+    fprintf(stderr, "DEBUG: nmarks = %i, markedcounter = %i", nmarks, markedcounter);
+    return 0;
+    // do {
+        // curpage should be set as current page (sets hp and heaplimit pointers)
+    //     makecurrent(curpage);
+    //     // Iterate through the page's MValues (until hp == heaplimit)
+    //     while (hp < heaplimit) {
+    //         // If heap pointer points to a live object, unmark it
+    //         if (hp -> live) {
+    //             markedcounter++;
+    //             hp -> live = 0;
+    //         } else { // Otherwise unmarked, so return it
+    //             gc_debug_pre_allocate(&(hp)->v);
+    //             return &(hp) -> v;
+    //         }
+    //         // Increment heap pointer
+    //         hp++;
+    //     }
+    //     curpage = curpage -> tl;
+    // } while (curpage != NULL); // Loop again if the next page isn't NULL
+    // All pages have been sweeped, everything should be unmarked
+    
+    // Check if every object on the heap is live, if so, grow heap
 
-/* tell the debugging interface that [[&hp->v]] is about to be allocated 282e */
-    gc_debug_pre_allocate(&hp->v);
-    return &(hp++)->v;
+    // Curpage is now NULL, sweeped through all pages everything unmarked
+    // if (hp == heaplimit && curpage == NULL) {
+    //     mark();
+    //     makecurrent(pagelist);
+    // }
+    // if (markedcounter == heapsize) {
+    //     growheap();
+    // }
+    // Just to return a value to wane error [control reaches end of non-void function]
+    // gc_debug_pre_allocate(&hp->v);
+    // return &(hp++)->v;
 }
+
+
+/* ms.c ((prototype)) 268b */
+// Value* allocloc(void) {
+//     // if (hp == heaplimit)
+//     //     addpage();
+//     // assert(hp < heaplimit);
+
+//     // // Set counter (Maybe use nmarked)
+//     // int markedcounter = 0;
+//     // // Set the current page to start of pagelist
+//     // curpage = pagelist;
+//     // do {
+//     //     // curpage should be set as current page (sets hp and heaplimit pointers)
+//     //     makecurrent(curpage);
+//     //     // Iterate through the page's MValue (until hp == heaplimit)
+//     //     while (hp < heaplimit) {
+//     //         // If heap pointer points to a live object, unmark it
+//     //         if (hp -> live) {
+//     //             markedcounter++;
+//     //             hp -> live = 0;
+//     //         } else { // Otherwise unmarked, so return it
+//     //             return &(hp++) -> v;
+//     //         }
+//     //         // Increment heap pointer
+//     //         hp++;
+//     //     }
+//     //     curpage = curpage -> tl;
+//     // } while (curpage != NULL);
+
+
+//     if (hp == heaplimit) {
+//         if (curpage -> tl) {
+//             makecurrent(curpage -> tl);
+//         } else {
+//             mark();
+//             makecurrent(pagelist);
+//         }
+//     }
+
+//     if (markedcounter == heapsize) {
+//         growheap();
+//     } else {
+//         mark();
+//         makecurrent(pagelist);
+//     }
+//     // If reached end of heap without finding unmarked object, call mark()
+//     // if (curpage == NULL && hp == heaplimit) {
+//     //     mark();
+//     // }
+
+//     if (!hp -> live) {
+//         /* tell the debugging interface that [[&hp->v]] is about to be allocated 282e */
+//         gc_debug_pre_allocate(&hp->v);
+//         return &(hp++)->v;
+//     }
+// }
 /* ms.c 269b */
 static void visitenv(Env env) {
     for (; env; env = env->tl)
@@ -139,9 +236,10 @@ static void visitenv(Env env) {
 /* ms.c ((prototype)) 269c */
 static void visitloc(Value *loc) {
     Mvalue *m = (Mvalue*) loc;
-    /* If mark bit is off, turn on (set as live)*/
+    /* If mark bit is off, turn on (set as live) */
     if (!m->live) {
         m->live = 1;
+        nmarks++; // Increment # of marks
         /* Visit the adjacent objects */
         visitvalue(m->v);
     }
@@ -309,7 +407,6 @@ static void visitroots(void) {
 /* you need to redefine these functions */
 void printfinalstats(void) { 
   (void)nalloc; (void)ncollections; (void)nmarks;
-  assert(0); 
 }
 /* ms.c ((prototype)) S377h */
 void avoid_unpleasant_compiler_warnings(void) {
