@@ -73,18 +73,14 @@ static void addpage(void) {
 /* Mark procedure from exercise 7 */
 static void mark(void) {
     // Start mark procedure (start of garbage collection)
-
     // Visit all objects reachable from roots and mark them as live
     visitroots();
-
     // Print out statistics
     fprintf(stderr, "[GC stats: heap size %i live data %i ratio %3f]",
         heapsize, nmarks, (float) (heapsize / nmarks)
     );
-
-    // Increment # of garbage collections
+    // Increment # of garbage collections (ncollections)
     ncollections++;
-
     // End of mark, start of sweep phase
 }
 
@@ -94,10 +90,11 @@ void growheap(void) {
 }
 
 Value* allocloc(void) {
+    // Pagelist is NULL at first so add a page
     if (pagelist == NULL) {
         growheap();
     }
-    // Increment number of allocations
+    // Increment number of allocations (nalloc)
     nalloc++;
     // Set counter for marked objects
     int markedcounter = 0;
@@ -117,6 +114,7 @@ Value* allocloc(void) {
                 hp++;
             } else { // Otherwise unmarked, so return it
                 unmarkedcounter++;
+                // Preallocate and return value (sweep past and return)
                 gc_debug_pre_allocate(&hp -> v);
                 return &(hp++) -> v;
             }
@@ -127,52 +125,28 @@ Value* allocloc(void) {
     }
     // All pages have been sweeped, everything should set as unmarked
     if (unmarkedcounter == 0) {
-        if (markedcounter > 2) {
+        // Check if every object encountered was live (all cells on heap are marked live)
+        if (markedcounter == heapsize) {
+            // If so, we must grow the heap as it is full of live objects
             growheap();
         } else {
+            // No unmarked objects were found during the sweep phase, mark
             mark();
+            // Set current page to beginning of page list, and reset hp and heaplimit pointers
             makecurrent(pagelist);
         }
     }
 
-    fprintf(stderr, "DEBUG: nmarks = %i, markedcounter = %i", nmarks, markedcounter);
-    return 0;
-    // do {
-        // curpage should be set as current page (sets hp and heaplimit pointers)
-    //     makecurrent(curpage);
-    //     // Iterate through the page's MValues (until hp == heaplimit)
-    //     while (hp < heaplimit) {
-    //         // If heap pointer points to a live object, unmark it
-    //         if (hp -> live) {
-    //             markedcounter++;
-    //             hp -> live = 0;
-    //         } else { // Otherwise unmarked, so return it
-    //             gc_debug_pre_allocate(&(hp)->v);
-    //             return &(hp) -> v;
-    //         }
-    //         // Increment heap pointer
-    //         hp++;
-    //     }
-    //     curpage = curpage -> tl;
-    // } while (curpage != NULL); // Loop again if the next page isn't NULL
-    // All pages have been sweeped, everything should be unmarked
-    
-    // Check if every object on the heap is live, if so, grow heap
+    // Print debug stats
+    // fprintf(stderr, "DEBUG: nmarks = %i, markedcounter = %i", nmarks, markedcounter);
+    // fprintf(stderr, "DEBUG: nalloc = %i, ncollections = %i", nalloc, ncollections)
 
-    // Curpage is now NULL, sweeped through all pages everything unmarked
-    // if (hp == heaplimit && curpage == NULL) {
-    //     mark();
-    //     makecurrent(pagelist);
-    // }
-    // if (markedcounter == heapsize) {
-    //     growheap();
-    // }
-    // Just to return a value to wane error [control reaches end of non-void function]
-    // gc_debug_pre_allocate(&hp->v);
-    // return &(hp++)->v;
+    /* tell the debugging interface that [[&hp->v]] is about to be allocated 282e */
+    gc_debug_pre_allocate(&hp->v);
+    return &(hp++)->v;
 }
 
-
+// Commented out old version of allocloc
 /* ms.c ((prototype)) 268b */
 // Value* allocloc(void) {
 //     // if (hp == heaplimit)
@@ -201,7 +175,6 @@ Value* allocloc(void) {
 //     //     curpage = curpage -> tl;
 //     // } while (curpage != NULL);
 
-
 //     if (hp == heaplimit) {
 //         if (curpage -> tl) {
 //             makecurrent(curpage -> tl);
@@ -222,11 +195,11 @@ Value* allocloc(void) {
 //     //     mark();
 //     // }
 
-//     if (!hp -> live) {
+//     
 //         /* tell the debugging interface that [[&hp->v]] is about to be allocated 282e */
 //         gc_debug_pre_allocate(&hp->v);
 //         return &(hp++)->v;
-//     }
+//     
 // }
 /* ms.c 269b */
 static void visitenv(Env env) {
@@ -238,8 +211,8 @@ static void visitloc(Value *loc) {
     Mvalue *m = (Mvalue*) loc;
     /* If mark bit is off, turn on (set as live) */
     if (!m->live) {
-        m->live = 1;
-        nmarks++; // Increment # of marks
+        m->live = 1; // Set mark bit
+        nmarks++; // Increment # of marks (nmarks)
         /* Visit the adjacent objects */
         visitvalue(m->v);
     }
